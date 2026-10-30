@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Tablero 8 Puntos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        .dot-shadow {
+            box-shadow: inset -1px -1px 3px rgba(0, 0, 0, 0.5), 1px 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .side-highlight {
+            transition: all 0.25s ease;
+        }
+
+        .side-error {
+            background-color: rgba(239, 68, 68, 0.18);
+            border-color: #ef4444 !important;
+            box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+
+        .side-correct {
+            background-color: rgba(34, 197, 94, 0.18);
+            border-color: #22c55e !important;
+            box-shadow: inset 0 0 12px rgba(34, 197, 94, 0.3);
+        }
+
+        /* Square Board 4x4 Grid */
+        .board-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 6px;
+            aspect-ratio: 1 / 1;
+        }
+
+        .dot-item {
+            cursor: grab;
+            transition: transform 0.15s ease;
+        }
+
+        .dot-item:active {
+            cursor: grabbing;
+            transform: scale(1.2);
+        }
+
+        .dragging {
+            opacity: 0.4;
+        }
+
+        .cell-drop-hover {
+            background-color: #fef08a !important;
+            border-color: #f59e0b !important;
+        }
+    </style>
+</head>
+<body class="bg-[#0f172a] text-slate-100 min-h-screen flex flex-col items-center justify-between p-3 sm:p-5">
+
+    <!-- Header Section -->
+    <header class="w-full max-w-lg text-center mt-1">
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-wider text-amber-400 drop-shadow">DESAFÍO DE LOS 8 PUNTOS</h1>
+        <p class="text-xs sm:text-sm text-slate-400 mt-1">Cada lado debe sumar **exactamente 8 puntos** y el centro quedar vacío.</p>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="w-full max-w-lg flex flex-col items-center my-auto gap-3">
+        
+        <!-- Score Bar -->
+        <div class="flex justify-between items-center w-full px-4 py-2.5 bg-[#1e293b] rounded-xl border border-slate-700/80 shadow-lg">
+            <div class="flex items-center gap-2">
+                <span class="text-slate-400 text-xs font-semibold uppercase tracking-wider">NIVEL:</span>
+                <span id="level-display" class="text-2xl font-black text-amber-400">1</span>
+            </div>
+            <div class="flex flex-col items-center">
+                <span id="shape-name" class="text-xs font-bold text-amber-300 tracking-wider uppercase">TABLERO CUADRADO</span>
+                <span id="total-dots" class="text-xs text-cyan-400 font-medium">TOTAL FICHAS: 0</span>
+            </div>
+            <button id="reset-btn" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 text-xs font-semibold px-3 py-2 rounded-lg transition flex items-center gap-1.5 shadow">
+                <i class="fa-solid fa-rotate-right"></i> Reiniciar
+            </button>
+        </div>
+
+        <!-- Main Game Board Box -->
+        <div class="relative w-full max-w-[420px] p-3 sm:p-4 bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-700">
+            
+            <!-- Dynamic Polygon Container (Square or Polygon) -->
+            <div id="board-container" class="relative w-full aspect-square bg-slate-300 p-2 rounded-xl border-2 border-slate-400 overflow-hidden flex items-center justify-center">
+                <!-- Dynamic Content Generated JS -->
+            </div>
+
+        </div>
+
+        <!-- Quick Help Legend -->
+        <div class="text-xs text-slate-400 text-center max-w-sm space-y-1">
+            <p><span class="inline-block w-3 h-3 bg-red-500 rounded-sm mr-1 align-middle"></span> Rojo = El lado NO tiene 8 puntos.</p>
+            <p><span class="inline-block w-3 h-3 bg-green-500 rounded-sm mr-1 align-middle"></span> Verde = Lado correcto con 8 puntos.</p>
+            <p id="polygon-info" class="text-slate-400 font-medium mt-1">Arrastra una ficha a otra casilla para reorganizar.</p>
+        </div>
+    </main>
+
+    <!-- Modal Level Complete -->
+    <div id="level-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-[#1e293b] border border-slate-700 rounded-2xl p-6 text-center max-w-xs w-full shadow-2xl transform scale-90 transition-transform duration-300">
+            <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 class="text-2xl font-black text-white mb-1">¡Nivel Completado!</h2>
+            <p id="modal-msg" class="text-sm text-slate-300 mb-6">Todos los lados tienen 8 puntos y el centro está vacío.</p>
+            <button id="next-level-btn" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-slate-950 font-extrabold rounded-xl shadow-lg transition active:scale-95">
+                Siguiente Nivel <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME STATE ---
+        let level = 1;
+        let totalDots = 0;
+        let numSides = 4; // Starts at 4 (Square)
+        let cellCounts = {};
+        let centerCount = 1;
+        let draggedFrom = null;
+
+        // Shape Names in Spanish
+        const SHAPE_NAMES = {
+            4: "Tablero Cuadrado",
+            5: "Tablero Pentágono",
+            6: "Tablero Hexágono",
+            7: "Tablero Heptágono",
+            8: "Tablero Octágono",
+            9: "Tablero Eneágono",
+            10: "Tablero Decágono"
+        };
+
+        // --- CORE MATH & GEOMETRY HELPERS ---
+        // Determines number of sides required for N total dots (each side needs 8 dots)
+        // Max capacity for N sides = N * 8 dots
+        function getRequiredSidesForDots(dots) {
+            let sides = 4;
+            while (sides * 8 < dots) {
+                sides++;
+            }
+            return sides;
+        }
+
+        // --- INITIALIZATION ---
+        function initLevel(lvl) {
+            level = lvl;
+            totalDots = 20 + (lvl - 1); // Level 1 starts with 20 dots, adds 1 per level
+            
+            // Calculate how many sides are required so the puzzle remains solvable
+            numSides = getRequiredSidesForDots(totalDots);
+
+            document.getElementById('level-display').textContent = level;
+            document.getElementById('total-dots').textContent = `TOTAL FICHAS: ${totalDots}`;
+            document.getElementById('shape-name').textContent = SHAPE_NAMES[numSides] || `Tablero ${numSides} Lados`;
+
+            if (numSides > 4) {
+                document.getElementById('polygon-info').textContent = `¡El tablero se ha expandido a un ${SHAPE_NAMES[numSides].replace("Tablero ", "")}!`;
+            } else {
+                document.getElementById('polygon-info').textContent = "Arrastra una ficha a otra casilla para reorganizar.";
+            }
+
+            // Distribute dots initially
+            distributeInitialDots();
+            renderBoard();
+            checkSideSums();
+        }
+
+        function distributeInitialDots() {
+            cellCounts = {};
+            
+            if (numSides === 4 && level === 1) {
+                // Exact starting configuration from Image 1
+                cellCounts = {
+                    0: 3, 1: 1, 2: 1, 3: 3,
+                    4: 1, 5: 1,
+                    6: 3, 7: 1, 8: 1, 9: 3,
+                    10: 1, 11: 1
+                };
+                centerCount = 1;
+                return;
+            }
+
+            // For level > 1 or dynamic polygons
+            // Total outer cells = numSides * 3 (since 1 intermediate cell per side + vertices, or 2 per side)
+            // Let's use 3 cells per side structure: V0, I0_1, V1, I1_2, ...
+            // Total outer cells = 2 * numSides
+            const totalOuterCells = 3 * numSides;
+            centerCount = 1; // Always 1 new dot starts in the center
+            let remainingDots = totalDots - 1;
+
+            // Distribute remaining dots evenly across outer cells
+            const numCells = 3 * numSides;
+            for (let i = 0; i < numCells; i++) {
+                cellCounts[i] = 0;
+            }
+
+            let idx = 0;
+            while (remainingDots > 0) {
+                cellCounts[idx % numCells]++;
+                remainingDots--;
+                idx++;
+            }
+        }
+
+        // --- RENDER BOARD ---
+        function renderBoard() {
+            const container = document.getElementById('board-container');
+            container.innerHTML = '';
+
+            if (numSides === 4) {
+                renderSquareBoard(container);
+            } else {
+                renderPolygonBoard(container, numSides);
+            }
+
+            setupDropListeners();
+        }
+
+        // --- 1. SQUARE BOARD RENDERER (Original 4x4 Grid Look) ---
+        function renderSquareBoard(container) {
+            // Container layout HTML for 4x4
+            container.className = "board-grid-4 w-full h-full bg-slate-200 p-2 rounded-xl border-2 border-slate-400 relative";
+
+            // Add side indicators overlays
+            const sideTop = createSideBadge('top', 'top-1 left-1 right-1 h-[26%]', 'Arriba');
+            const sideBottom = createSideBadge('bottom', 'bottom-1 left-1 right-1 h-[26%]', 'Abajo');
+            const sideLeft = createSideBadge('left', 'top-1 bottom-1 left-1 w-[26%]', 'Izq');
+            const sideRight = createSideBadge('right', 'top-1 bottom-1 right-1 w-[26%]', 'Der');
+
+            container.appendChild(sideTop);
+            container.appendChild(sideBottom);
+            container.appendChild(sideLeft);
+            container.appendChild(sideRight);
+
+            // Cells placement (0..11)
+            const cellIndices = [
+                0, 1, 2, 3,
+                11, 'center', 'center', 4,
+                10, 'center', 'center', 5,
+                9, 8, 7, 6
+            ];
+
+            let centerAdded = false;
+
+            cellIndices.forEach((cellId, gridIndex) => {
+                if (cellId === 'center') {
+                    if (!centerAdded) {
+                        const centerEl = document.createElement('div');
+                        centerEl.id = 'center-cell';
+                        centerEl.dataset.cell = 'center';
+                        centerEl.className = 'col-span-2 row-span-2 bg-slate-100 rounded-xl border-2 border-dashed border-amber-400/80 flex flex-col items-center justify-center p-2 relative shadow-inner z-20';
+                        centerEl.innerHTML = `<span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center pointer-events-none mb-1">Zona Central</span><div id="center-dots-container" class="flex flex-wrap items-center justify-center gap-1.5 min-h-[30px] w-full"></div>`;
+                        container.appendChild(centerEl);
+                        centerAdded = true;
+                    }
+                } else {
+                    const cellEl = createCellElement(cellId, 'bg-white rounded-lg border border-slate-300 flex flex-wrap items-center justify-center p-1 gap-1 shadow-inner relative z-20');
+                    container.appendChild(cellEl);
+                }
+            });
+
+            // Populate dots
+            for (let i = 0; i < 12; i++) {
+                fillCellWithDots(i);
+            }
+            fillCenterWithDots();
+        }
+
+        function createSideBadge(sideKey, positionClasses, label) {
+            const div = document.createElement('div');
+            div.id = `side-${sideKey}`;
+            div.className = `side-highlight absolute ${positionClasses} border-4 border-transparent rounded-xl pointer-events-none z-10 flex items-center justify-center`;
+            
+            const badge = document.createElement('span');
+            badge.id = `badge-${sideKey}`;
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-900/90 text-slate-200 border border-slate-700 shadow-md';
+            badge.textContent = `${label}: 0/8`;
+            div.appendChild(badge);
+            return div;
+        }
+
+        // --- 2. POLYGON BOARD RENDERER (Pentagon, Hexagon, etc.) ---
+        function renderPolygonBoard(container, sides) {
+            container.className = "relative w-full h-full bg-slate-200 p-2 rounded-xl border-2 border-slate-400 overflow-hidden";
+
+            // SVG overlay for side highlights
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("class", "absolute inset-0 w-full h-full pointer-events-none z-10");
+            container.appendChild(svg);
+
+            const width = container.clientWidth || 380;
+            const height = container.clientHeight || 380;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = width * 0.38;
+
+            // Compute polygon vertices
+            const vertices = [];
+            for (let i = 0; i < sides; i++) {
+                // Angle starting from top (-PI/2)
+                const angle = (i * 2 * Math.PI / sides) - (Math.PI / 2);
+                const vx = centerX + radius * Math.cos(angle);
+                const vy = centerY + radius * Math.sin(angle);
+                vertices.push({ x: vx, y: vy });
+            }
+
+            // Create center cell in polygon
+            const centerEl = document.createElement('div');
+            centerEl.id = 'center-cell';
+            centerEl.dataset.cell = 'center';
+            centerEl.className = 'absolute bg-slate-100 rounded-xl border-2 border-dashed border-amber-400/80 flex flex-col items-center justify-center p-2 shadow-inner z-30 transform -translate-x-1/2 -translate-y-1/2';
+            centerEl.style.left = `${centerX}px`;
+            centerEl.style.top = `${centerY}px`;
+            centerEl.style.width = '100px';
+            centerEl.style.height = '100px';
+            centerEl.innerHTML = `<span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center pointer-events-none mb-1">Zona Central</span><div id="center-dots-container" class="flex flex-wrap items-center justify-center gap-1 min-h-[30px] w-full"></div>`;
+            container.appendChild(centerEl);
+
+            // Total outer cells = 3 per side (Vertex_i, Edge_i_1, Edge_i_2)
+            let cellIndexCounter = 0;
+
+            for (let i = 0; i < sides; i++) {
+                const nextI = (i + 1) % sides;
+                const v1 = vertices[i];
+                const v2 = vertices[nextI];
+
+                // Render vertex cell
+                const vCell = createCellElement(cellIndexCounter, 'absolute bg-white rounded-lg border border-slate-300 flex flex-wrap items-center justify-center p-1 gap-1 shadow-inner z-30 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12');
+                vCell.style.left = `${v1.x}px`;
+                vCell.style.top = `${v1.y}px`;
+                container.appendChild(vCell);
+                cellIndexCounter++;
+
+                // Render 2 intermediate cells along the edge
+                for (let step = 1; step <= 2; step++) {
+                    const ratio = step / 3;
+                    const ex = v1.x + (v2.x - v1.x) * ratio;
+                    const ey = v1.y + (v2.y - v1.y) * ratio;
+
+                    const eCell = createCellElement(cellIndexCounter, 'absolute bg-white rounded-lg border border-slate-300 flex flex-wrap items-center justify-center p-1 gap-1 shadow-inner z-30 transform -translate-x-1/2 -translate-y-1/2 w-11 h-11');
+                    eCell.style.left = `${ex}px`;
+                    eCell.style.top = `${ey}px`;
+                    container.appendChild(eCell);
+                    cellIndexCounter++;
+                }
+
+                // Render SVG side line overlay & badge for this side
+                const line = document.createElementNS(svgNS, "line");
+                line.setAttribute("id", `side-line-${i}`);
+                line.setAttribute("x1", v1.x);
+                line.setAttribute("y1", v1.y);
+                line.setAttribute("x2", v2.x);
+                line.setAttribute("y2", v2.y);
+                line.setAttribute("stroke", "transparent");
+                line.setAttribute("stroke-width", "12");
+                line.setAttribute("stroke-linecap", "round");
+                line.setAttribute("class", "side-highlight");
+                svg.appendChild(line);
+
+                // Badge positioning at mid-edge
+                const midX = (v1.x + v2.x) / 2;
+                const midY = (v1.y + v2.y) / 2;
+
+                const badge = document.createElement('div');
+                badge.className = 'absolute z-40 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none';
+                badge.style.left = `${midX}px`;
+                badge.style.top = `${midY}px`;
+                badge.innerHTML = `<span id="badge-poly-${i}" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-900/90 text-slate-100 border border-slate-700 shadow-md">Lado ${i+1}: 0/8</span>`;
+                container.appendChild(badge);
+            }
+
+            // Fill cells with dots
+            for (let c = 0; c < sides * 3; c++) {
+                fillCellWithDots(c);
+            }
+            fillCenterWithDots();
+        }
+
+        // --- HELPER CREATORS ---
+        function createCellElement(cellId, classString) {
+            const cell = document.createElement('div');
+            cell.dataset.cell = cellId;
+            cell.className = `cell ${classString}`;
+            return cell;
+        }
+
+        function fillCellWithDots(cellId) {
+            const cellEl = document.querySelector(`[data-cell="${cellId}"]`);
+            if (!cellEl) return;
+            cellEl.innerHTML = '';
+            const count = cellCounts[cellId] || 0;
+            for (let d = 0; d < count; d++) {
+                cellEl.appendChild(createDotElement(cellId));
+            }
+        }
+
+        function fillCenterWithDots() {
+            const centerContainer = document.getElementById('center-dots-container');
+            if (!centerContainer) return;
+            centerContainer.innerHTML = '';
+            for (let d = 0; d < centerCount; d++) {
+                centerContainer.appendChild(createDotElement('center'));
+            }
+        }
+
+        // --- CREATE DOT ITEM ---
+        function createDotElement(fromLocation) {
+            const dot = document.createElement('div');
+            dot.className = 'w-5 h-5 rounded-full bg-slate-900 border border-slate-700 dot-shadow dot-item flex-shrink-0';
+            dot.setAttribute('draggable', 'true');
+            dot.dataset.from = fromLocation;
+
+            // Drag Events
+            dot.addEventListener('dragstart', handleDragStart);
+            dot.addEventListener('dragend', handleDragEnd);
+
+            // Touch support for mobile dragging
+            dot.addEventListener('touchstart', handleTouchStart, { passive: false });
+            dot.addEventListener('touchmove', handleTouchMove, { passive: false });
+            dot.addEventListener('touchend', handleTouchEnd);
+
+            return dot;
+        }
+
+        // --- DROP LISTENERS SETUP ---
+        function setupDropListeners() {
+            document.querySelectorAll('.cell, #center-cell').forEach(cell => {
+                cell.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    cell.classList.add('cell-drop-hover');
+                });
+
+                cell.addEventListener('dragleave', () => {
+                    cell.classList.remove('cell-drop-hover');
+                });
+
+                cell.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    cell.classList.remove('cell-drop-hover');
+                    const targetCell = cell.dataset.cell;
+                    moveDot(draggedFrom, targetCell);
+                });
+            });
+        }
+
+        // --- DRAG & DROP LOGIC ---
+        function handleDragStart(e) {
+            draggedFrom = this.dataset.from;
+            this.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', draggedFrom);
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+
+        // --- MOBILE TOUCH SUPPORT ---
+        let activeTouchDot = null;
+        let touchClone = null;
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            activeTouchDot = this;
+            draggedFrom = this.dataset.from;
+
+            touchClone = this.cloneNode(true);
+            touchClone.style.position = 'fixed';
+            touchClone.style.zIndex = '1000';
+            touchClone.style.pointerEvents = 'none';
+            touchClone.style.opacity = '0.85';
+            touchClone.style.transform = 'scale(1.3)';
+            document.body.appendChild(touchClone);
+
+            updateTouchClonePosition(e.touches[0]);
+        }
+
+        function handleTouchMove(e) {
+            if (!touchClone) return;
+            e.preventDefault();
+            updateTouchClonePosition(e.touches[0]);
+        }
+
+        function handleTouchEnd(e) {
+            if (!touchClone) return;
+
+            const touch = e.changedTouches[0];
+            const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+            const dropZone = targetEl ? targetEl.closest('.cell, #center-cell') : null;
+
+            if (dropZone) {
+                const targetCell = dropZone.dataset.cell;
+                moveDot(draggedFrom, targetCell);
+            }
+
+            if (touchClone && touchClone.parentNode) {
+                touchClone.parentNode.removeChild(touchClone);
+            }
+            touchClone = null;
+            activeTouchDot = null;
+        }
+
+        function updateTouchClonePosition(touch) {
+            if (touchClone) {
+                touchClone.style.left = `${touch.clientX - 10}px`;
+                touchClone.style.top = `${touch.clientY - 10}px`;
+            }
+        }
+
+        // --- MOVE DOT core ---
+        function moveDot(from, to) {
+            if (from === null || to === null || from === to) return;
+
+            // Deduct from origin
+            if (from === 'center') {
+                if (centerCount > 0) centerCount--;
+            } else {
+                const idx = parseInt(from);
+                if (cellCounts[idx] > 0) cellCounts[idx]--;
+            }
+
+            // Add to destination
+            if (to === 'center') {
+                centerCount++;
+            } else {
+                const idx = parseInt(to);
+                cellCounts[idx] = (cellCounts[idx] || 0) + 1;
+            }
+
+            if (from === 'center' || to === 'center') {
+                fillCenterWithDots();
+            }
+            if (from !== 'center') fillCellWithDots(parseInt(from));
+            if (to !== 'center') fillCellWithDots(parseInt(to));
+
+            checkSideSums();
+        }
+
+        // --- CHECK SIDE SUMS & WIN CONDITION ---
+        function checkSideSums() {
+            let allCorrect = true;
+
+            if (numSides === 4) {
+                // Square sides definition
+                const squareSides = {
+                    top: [0, 1, 2, 3],
+                    right: [3, 4, 5, 6],
+                    bottom: [9, 8, 7, 6],
+                    left: [0, 11, 10, 9]
+                };
+
+                const sideNames = { top: 'Arriba', right: 'Derecha', bottom: 'Abajo', left: 'Izquierda' };
+
+                Object.keys(squareSides).forEach(sideKey => {
+                    const indices = squareSides[sideKey];
+                    const sum = indices.reduce((acc, idx) => acc + (cellCounts[idx] || 0), 0);
+
+                    const sideEl = document.getElementById(`side-${sideKey}`);
+                    const badgeEl = document.getElementById(`badge-${sideKey}`);
+
+                    if (badgeEl) badgeEl.textContent = `${sideNames[sideKey]}: ${sum}/8`;
+
+                    if (sum === 8) {
+                        sideEl.classList.add('side-correct');
+                        sideEl.classList.remove('side-error');
+                        if (badgeEl) badgeEl.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white shadow';
+                    } else {
+                        sideEl.classList.add('side-error');
+                        sideEl.classList.remove('side-correct');
+                        if (badgeEl) badgeEl.className = 'text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white shadow';
+                        allCorrect = false;
+                    }
+                });
+
+            } else {
+                // Polygon sides definition (each side i contains cells: Vertex_i, Edge_i_1, Edge_i_2, Vertex_i+1)
+                for (let i = 0; i < numSides; i++) {
+                    const v1 = i * 3;
+                    const e1 = v1 + 1;
+                    const e2 = v1 + 2;
+                    const v2 = ((i + 1) % numSides) * 3;
+
+                    const sum = (cellCounts[v1] || 0) + (cellCounts[e1] || 0) + (cellCounts[e2] || 0) + (cellCounts[v2] || 0);
+
+                    const badgeEl = document.getElementById(`badge-poly-${i}`);
+                    const lineEl = document.getElementById(`side-line-${i}`);
+
+                    if (badgeEl) badgeEl.textContent = `Lado ${i+1}: ${sum}/8`;
+
+                    if (sum === 8) {
+                        if (badgeEl) badgeEl.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-600 text-white shadow';
+                        if (lineEl) lineEl.setAttribute("stroke", "rgba(34, 197, 94, 0.6)");
+                    } else {
+                        if (badgeEl) badgeEl.className = 'text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-600 text-white shadow';
+                        if (lineEl) lineEl.setAttribute("stroke", "rgba(239, 68, 68, 0.6)");
+                        allCorrect = false;
+                    }
+                }
+            }
+
+            // Win Condition
+            if (allCorrect && centerCount === 0) {
+                setTimeout(showWinModal, 300);
+            }
+        }
+
+        // --- WIN MODAL & PROGRESSION ---
+        function showWinModal() {
+            const modal = document.getElementById('level-modal');
+            const modalMsg = document.getElementById('modal-msg');
+
+            const nextLvlSides = getRequiredSidesForDots(20 + level);
+            let extraMsg = "";
+            if (nextLvlSides > numSides) {
+                extraMsg = ` ¡Atención! En el siguiente nivel el tablero evolucionará a un **${SHAPE_NAMES[nextLvlSides]}** para dar cabida a más fichas.`;
+            }
+            
+            modalMsg.textContent = `¡Excelente! Lograste mantener 8 puntos en cada lado en el Nivel ${level}.${extraMsg}`;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('div').classList.remove('scale-90');
+                modal.querySelector('div').classList.add('scale-100');
+            }, 10);
+        }
+
+        function hideWinModal() {
+            const modal = document.getElementById('level-modal');
+            modal.classList.add('opacity-0');
+            modal.querySelector('div').classList.remove('scale-100');
+            modal.querySelector('div').classList.add('scale-90');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('next-level-btn').addEventListener('click', () => {
+            hideWinModal();
+            initLevel(level + 1);
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            initLevel(level);
+        });
+
+        // Initialize Level 1 on load
+        window.onload = function() {
+            initLevel(1);
+        };
+    </script>
+</body>
+</html>
